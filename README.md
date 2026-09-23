@@ -1,230 +1,224 @@
-# Trabalho 1 — Comunicação entre processos (Sistemas Distribuídos)
+# Trabalho 1 — Comunicação entre processos: Sistema de Hotelaria
 
-**Projeto:** serviço remoto de estoque de roupas artesanais, em Java 17+ e API padrão do JDK.
+**Disciplina:** Sistemas Distribuídos. **Linguagem:** Java 17 ou superior, somente bibliotecas da JDK. **Tema do serviço remoto:** sistema de hotelaria com reservas em Hotel, Motel e Pousada vinculados a um Complexo Turístico.
 
-Este repositório implementa os **exercícios obrigatórios 1–4** e, em `extra/`, a **questão extra 6 (votação didática)**. Não são necessárias bibliotecas externas, IDE específica, banco de dados ou acesso à nuvem. A aplicação deve ser compilada antes de executar os comandos abaixo.
+O projeto implementa os **quatro exercícios obrigatórios** do enunciado e mantém a **questão extra de votação em um módulo separado** (`extra/`). O sistema principal é inteiramente de hotelaria. Dados são armazenados em memória enquanto o servidor executa. Não há dependência de nuvem, IDE, banco de dados ou bibliotecas de terceiros.
 
-> Escopo didático: contas e senhas de exemplo, dados em memória, TCP sem TLS e grupos UDP sem criptografia. Não use este código como sistema comercial ou eleitoral real.
+> Projeto de demonstração acadêmica: usuários de teste e senhas fixas, TCP sem TLS, UDP multicast sem controle criptográfico de membros, ausência de banco de dados e de gestão comercial real. As tarifas são exemplos. Não use como sistema de produção.
 
-## 1. Estrutura e relação com o enunciado
+## 1. Modelagem orientada a objetos solicitada
 
-| Exigência | Implementação |
-|---|---|
-| Serviço remoto escolhido | Controle de estoque e vendas de peças artesanais |
-| POJO 1 | `modelo/Produto.java`: ID, nome, preço em centavos e quantidade |
-| POJO 2 | `modelo/Movimentacao.java`: ID do produto, tipo ENTRADA/SAIDA, quantidade e timestamp |
-| Classe de serviço 1 | `servico/EstoqueService.java`: cadastrar, consultar, listar, registrar entrada, vender, histórico |
-| Classe de serviço 2 | `servico/RelatorioService.java`: valor total e produtos com estoque baixo |
-| Exercício 1 | `streams/ProdutoOutputStream.java`: `extends OutputStream`; transmite array de **Movimentacao**, com quantidade selecionada |
-| Exercício 2 | `streams/ProdutoInputStream.java`: `extends InputStream`; reconstrói o array |
-| Testes 1 e 2 | `streams/StreamsDemo.java`: `System.out`, `FileOutputStream`, socket TCP, `System.in`, `FileInputStream` e socket TCP no servidor |
-| Exercício 3 | `rpc/ProtocoloRpc.java`, `RpcServidor.java`, `RpcCliente.java`: serialização explícita de pedido, resposta e POJO Produto, cliente-servidor TCP |
-| Exercício 4 | `multicast/`: autenticação TCP; `joinGroup`, `leaveGroup`, mensagens JSON UDP multicast e múltiplas threads |
-| Questão extra 6 | `extra/`: votação com XML sobre TCP, login, papéis eleitor/admin, prazo, apuração e notas UDP multicast |
-| Testes e demonstração | `testes/Testes.java`, `testar_integracao.sh` e logs em `evidencias/` |
+| Relação especificada | Implementação em Java | Responsabilidade |
+|---|---|---|
+| Aplicação | Sistema de Hotelaria | Serviço remoto de consulta e gerenciamento de reservas. |
+| Superclasse: Meios de Hospedagem | `modelo/MeioHospedagem.java` (singular, padrão de nome de classe) | Campos comuns: ID, nome, endereço, valor da diária e capacidade em unidades. |
+| Subclasses | `Hotel`, `Motel`, `Pousada` (`extends MeioHospedagem`) | Hotel: estrelas; motel: garagem privativa; pousada: café da manhã incluso. |
+| Agregação: Complexo Turístico | `ComplexoTuristico` | Reúne referências a estabelecimentos criados independentemente; desagregar não destrói o objeto. |
+| Interface: Reservas | `contrato/Reservas.java` | Contrato: `registrarReserva`, `cancelarReserva`, `efetivarReserva`. |
+| Implementação da interface | `servico/ReservaService.java` | Verifica disponibilidade e mantém estados PENDENTE, EFETIVADA e CANCELADA. |
+| POJO adicional | `Hospede` e `Reserva` | Identificam a pessoa, as datas, o meio, a quantidade e o estado da reserva. |
+| Segunda classe de serviço | `servico/HospedagemService.java` | Consulta e cadastra os estabelecimentos do complexo. |
 
-### Arquitetura resumida
+**POJO:** objeto simples que representa dados da aplicação. `Hotel`, `Motel` e `Pousada` são objetos do domínio derivados da superclasse; `Hospede` e `Reserva` são outros POJOs. `MeioHospedagem` é abstrata porque não existe estabelecimento genérico instanciado na aplicação. O diagrama editável de classes está em `diagrama_classes.puml` (PlantUML).
 
-```text
-Ex. 1 e 2
-[StreamsDemo cliente] --TCP 5001: lote de Movimentacao--> [StreamsDemo servidor]
-        |--System.out / FileOutputStream               |--System.in / FileInputStream
+### Regra funcional de disponibilidade
 
-Ex. 3
-[RpcCliente] --TCP 5002: request binário--> [RpcServidor] --> [EstoqueService]
-             <--TCP 5002: reply binário---        --> [RelatorioService]
+Uma reserva recebe `id`, `meioHospedagemId`, `Hospede`, data de entrada, data de saída e quantidade de unidades. `registrarReserva` confirma que existem unidades livres durante **todo** o intervalo. Reservas PENDENTES ou EFETIVADAS ocupam capacidade; CANCELADAS não ocupam. Dois intervalos conflitam se `entradaA < saidaB` **e** `saidaA > entradaB` (a data de saída é exclusiva). Por isso, a saída de um hóspede e a entrada do próximo no mesmo dia são compatíveis. `efetivarReserva` muda PENDENTE para EFETIVADA, e `cancelarReserva` libera unidades. O serviço usa `synchronized` para que dois clientes TCP concorrentes não reservem a mesma unidade duas vezes.
 
-Ex. 4
-[MulticastCliente 1] --TCP 5003: login-->
-[MulticastCliente 2] --TCP 5003: login--> [MulticastServidor]
-[MulticastCliente 1] <--UDP 230.0.0.1:5004--  [MulticastServidor]
-[MulticastCliente 2] <--UDP 230.0.0.1:5004--  [MulticastServidor]
+## 2. Mapeamento integral do enunciado
 
-Extra
-[VotacaoCliente eleitor/admin] <--TCP 5010: XML--> [VotacaoServidor]
-[VotacaoCliente eleitores]     <--UDP 230.0.0.2:5011: notas do admin--
-```
+| Exercício | Arquivos / tecnologia | Demonstração |
+|---|---|---|
+| 1. Saída personalizada | `streams/MeioHospedagemOutputStream.java extends OutputStream` | Construtor recebe `OutputStream destino`, `Reserva[] objetos`, `int quantidade`; envia array do **outro POJO Reserva** para `System.out`, arquivo e socket TCP. |
+| 2. Entrada personalizada | `streams/MeioHospedagemInputStream.java extends InputStream` | Construtor recebe `InputStream origem`; reconstrói `Reserva[]` usando `System.in`, arquivo e cliente TCP. |
+| 3. Serialização e request/reply | `rpc/ProtocoloRpc.java`, `RpcCliente.java`, `RpcServidor.java` | Cliente empacota pedido, servidor desempacota e executa, servidor empacota resposta, cliente desempacota; transmite `Hotel`/`Motel`/`Pousada` e `Reserva` em bytes via TCP. |
+| 4. Multicast | `multicast/*.java` | Login concorrente TCP 5003, notificações UDP multicast `230.0.0.1:5004`, `joinGroup`/`leaveGroup`, thread de recepção e thread de teclado em cada cliente; servidor com pools de threads. |
+| Questão extra | `extra/*.java` | Sistema de votação didático **independente** do domínio de hotelaria, mantido para atender ao exercício opcional. Login/voto TCP, avisos UDP e apuração com prazo. |
+| Testes e repositório | `testes/Testes.java`, `testar_integracao.sh`, `evidencias/` | Testes automatizados, demonstrações reais de dois processos e registros de execução. |
 
-## 2. Compilação
+## 3. Preparar e compilar
 
-É necessário **JDK 17 ou superior** (`java -version` e `javac -version`). Os exemplos supõem que o terminal está dentro da pasta extraída.
+Instale o **JDK 17+** e confirme `java -version` e `javac -version`. Extraia o ZIP e abra um terminal na pasta `trabalho_hotelaria_comunicacao`.
 
-**Linux/macOS:**
+Linux / macOS:
 
 ```bash
 ./compilar.sh
-java -cp out br.ufc.comunicacao.testes.Testes
+java -cp out br.ufc.hotelaria.testes.Testes
 ```
 
-**Windows (Prompt de Comando/cmd):**
+Windows — Prompt de Comando (cmd):
 
 ```bat
 compilar.bat
-java -cp out br.ufc.comunicacao.testes.Testes
+java -cp out br.ufc.hotelaria.testes.Testes
 ```
 
-No PowerShell, chame `./compilar.bat` ou `cmd /c compilar.bat`. Para redirecionamento de arquivos binários (`<` e `>`), os exemplos abaixo foram escritos para **cmd** ou shells de Linux/macOS. Em Windows, se os acentos aparecem incorretamente, execute `chcp 65001` no cmd antes de iniciar as aplicações.
+No PowerShell, execute `./compilar.bat`. Se o Windows exibir `?` no lugar de acentos, use `chcp 65001` no `cmd`. Os testes de integração completos podem ser executados em Linux/macOS ou Git Bash (`./testar_integracao.sh`).
 
-## 3. Exercícios 1 e 2 — Sockets e Streams
+## 4. Exercícios 1 e 2 — Streams, arquivos e TCP
 
-O objeto `Produto` fornece o nome à subclasse `ProdutoOutputStream`; o **array transmitido é de `Movimentacao`**, o outro POJO. O construtor recebe `(OutputStream destino, Movimentacao[] objetos, int quantidade)`. `enviar()` escreve o cabeçalho e apenas os primeiros `quantidade` elementos. `ProdutoInputStream(InputStream origem)` reconstrói os objetos com `lerMovimentacoes()`.
+A classe `MeioHospedagemOutputStream` se chama assim por derivar o nome da superclasse escolhida; os dados efetivamente enviados são um array do POJO diferente `Reserva`. A classe `MeioHospedagemInputStream` faz a leitura compatível.
 
-O formato do lote é binário e verificável:
+Formato binário do lote:
 
 ```text
-4 bytes: identificador mágico "MOV1"
-4 bytes: quantidade de registros N
-N vezes:
-    4 bytes: produtoId (int)
-    campo UTF: tipo (writeUTF / readUTF)
-    4 bytes: quantidade (int)
-    8 bytes: timestamp (long)
+int  MAGIC = 0x48525331  // "HRS1"
+int  quantidadeDeReservas
+para cada Reserva:
+    int  reservaId
+    int  meioHospedagemId
+    int  hospedeId
+    UTF  nomeHospede
+    long entradaEpochDay
+    long saidaEpochDay
+    int  unidades
+    UTF  status
 ```
 
-Os métodos `writeUTF`/`readUTF` usam o formato UTF modificado definido pelo Java; remetente e receptor usam a mesma API. `DataOutputStream` e `DataInputStream` escrevem/leem os números na mesma ordem e representação. `flush()` garante o envio; os streams padrão não são fechados pelo método `enviar()`.
+O `DataOutputStream` e o `DataInputStream` escrevem/leem a mesma sequência e tipos. Os métodos de envio não fecham automaticamente a saída padrão ou o socket do chamador; o código que abriu o recurso controla seu fechamento.
 
-### Teste A — arquivo (`FileOutputStream` / `FileInputStream`)
+**Teste com arquivo (`FileOutputStream` → `FileInputStream`):**
 
 ```bash
-java -cp out br.ufc.comunicacao.streams.StreamsDemo escrever-arquivo movimentos.bin
-java -cp out br.ufc.comunicacao.streams.StreamsDemo ler-arquivo movimentos.bin
+java -cp out br.ufc.hotelaria.streams.StreamsDemo escrever-arquivo reservas.bin
+java -cp out br.ufc.hotelaria.streams.StreamsDemo ler-arquivo reservas.bin
 ```
 
-### Teste B — saída e entrada padrão (`System.out` / `System.in`)
+**Teste com saída e entrada padrão (`System.out` → `System.in`):**
 
 ```bash
-java -cp out br.ufc.comunicacao.streams.StreamsDemo escrever-console > stdout.bin
-java -cp out br.ufc.comunicacao.streams.StreamsDemo ler-console < stdout.bin
+java -cp out br.ufc.hotelaria.streams.StreamsDemo escrever-console > console.bin
+java -cp out br.ufc.hotelaria.streams.StreamsDemo ler-console < console.bin
 ```
 
-**Importante:** a saída do primeiro comando é *binária*, não texto legível; o aviso é escrito em `System.err` para não misturar texto no lote.
+O conteúdo de `console.bin` é **binário** e não deve ser aberto como um texto. O primeiro programa escreve avisos em `System.err` para não misturar texto aos bytes. Os redirecionamentos `<` e `>` mostrados acima funcionam no `cmd` e em shells Unix; para PowerShell, prefira o `cmd`.
 
-### Teste C — socket remoto TCP (`OutputStream` / `InputStream`)
+**Teste remoto com TCP (abrir dois terminais):**
 
-Abra dois terminais:
+Terminal 1:
 
 ```bash
-# Terminal 1 (primeiro)
-java -cp out br.ufc.comunicacao.streams.StreamsDemo servidor-tcp 5001
+java -cp out br.ufc.hotelaria.streams.StreamsDemo servidor-tcp 5001
 ```
+
+Terminal 2:
 
 ```bash
-# Terminal 2
-java -cp out br.ufc.comunicacao.streams.StreamsDemo cliente-tcp 127.0.0.1 5001
+java -cp out br.ufc.hotelaria.streams.StreamsDemo cliente-tcp 127.0.0.1 5001
 ```
 
-O cliente transmite três movimentações, o servidor recebe os bytes via `Socket.getInputStream()` e imprime os três objetos reconstruídos. O servidor deste exercício encerra após atender a conexão de demonstração.
+O servidor imprime as três reservas reconstruídas e encerra depois de atender a conexão de demonstração.
 
-## 4. Exercício 3 — Serialização e request/reply
+## 5. Exercício 3 — Serviço remoto de reservas via TCP
 
-Inicie o servidor em um terminal:
+**Terminal 1 (servidor):**
 
 ```bash
-java -cp out br.ufc.comunicacao.rpc.RpcServidor
+java -cp out br.ufc.hotelaria.rpc.RpcServidor 5002
 ```
 
-Em outro, execute os pedidos:
+**Terminal 2 (cliente, um comando de cada vez):**
 
 ```bash
-java -cp out br.ufc.comunicacao.rpc.RpcCliente localhost LISTAR
-java -cp out br.ufc.comunicacao.rpc.RpcCliente localhost CONSULTAR 1
-java -cp out br.ufc.comunicacao.rpc.RpcCliente localhost VENDER 1 2
-java -cp out br.ufc.comunicacao.rpc.RpcCliente localhost ENTRADA 2 3
-java -cp out br.ufc.comunicacao.rpc.RpcCliente localhost RELATORIO
-java -cp out br.ufc.comunicacao.rpc.RpcCliente localhost VENDER 1 999
+# Ver os três tipos concretos do Complexo Turístico.
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 LISTAR
+
+# Ver Hotel de ID 1 e suas características.
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 CONSULTAR 1
+
+# Conferir vagas para um período.
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 DISPONIBILIDADE 1 2027-10-10 2027-10-13
+
+# Registrar 2 quartos do Hotel 1 para a hóspede Ana, por 3 diárias.
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 REGISTRAR 801 1 51 "Ana Lima" 2027-10-10 2027-10-13 2
+
+# Efetivar a reserva e, em seguida, consultar ou cancelar.
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 EFETIVAR 801
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 CONSULTAR_RESERVA 801
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 CANCELAR 801
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 RESERVAS
 ```
 
-Último comando: retorna uma **resposta de erro** sem deixar o estoque negativo. O servidor mantém o estado em memória enquanto estiver executando; reiniciá-lo restaura os dados de demonstração.
+**Como demonstrar erro de capacidade:** reinicie o servidor; registre cinco unidades do Hotel 1 no mesmo período e tente registrar mais uma em outra reserva. A segunda solicitação retorna `Sucesso: false` com a mensagem de unidades indisponíveis. Cancelar a primeira devolve a disponibilidade.
 
-**Empacotamento:**
+**Serialização:** a requisição usa `HRQ1`, nome da operação, IDs, nome da pessoa, datas em `epochDay` e quantidade. A resposta usa `HRP1`, sucesso/mensagem, disponibilidade, preço e listas de meios e reservas. Para `MeioHospedagem`, o protocolo envia um discriminador `HOTEL`, `MOTEL` ou `POUSADA`, depois os atributos comuns e o atributo específico da subclasse. Assim o cliente reconstrói o **subtipo correto**; para `Reserva`, reaproveita o `ReservaCodec`. O servidor atende múltiplos sockets TCP por um pool de oito threads.
+
+## 6. Exercício 4 — Autenticação TCP e multicast UDP
+
+Abra quatro terminais. No **servidor**:
+
+```bash
+java -cp out br.ufc.hotelaria.multicast.MulticastServidor
+```
+
+Nos **clientes 1 e 2**, execute o mesmo comando em terminais diferentes:
+
+```bash
+java -cp out br.ufc.hotelaria.multicast.MulticastCliente localhost aluno 1234
+```
+
+Após os dois logins, digite no terminal do servidor:
 
 ```text
-Cliente: writeInt(MAGIC_REQ), writeUTF(operacao), writeInt(id), writeInt(qtd)
-Servidor: readInt, readUTF, readInt, readInt  ->  executa operação
-Servidor: writeInt(MAGIC_REP), writeBoolean(sucesso), writeUTF(mensagem),
-          writeLong(valorTotalCentavos), writeInt(totalProdutos),
-          para cada Produto: writeInt(id), writeUTF(nome), writeLong(preço), writeInt(qtd)
-Cliente: lê os mesmos campos, na mesma ordem, e reconstitui os Produtos da resposta.
+ALERTA|Última suíte disponível na pousada
+NOTIFICACAO|Nova reserva registrada no complexo
+ATUALIZACAO|Horários de entrada atualizados
 ```
 
-Isto é **serialização manual em representação externa binária**, não `ObjectOutputStream`. O POJO `Produto` é explicitamente transformado em bytes e reconstruído do outro lado. O servidor utiliza um pool de oito threads; a lógica de `EstoqueService` é sincronizada para que clientes simultâneos não retirem a mesma unidade duas vezes.
+Os dois clientes exibem o mesmo JSON em tempo real, como `{"tipo":"ALERTA","mensagem":"Última suíte disponível na pousada","timestamp":...}`. O servidor também envia uma atualização automática periódica: ela é produzida em thread diferente das mensagens digitadas. Em cada cliente, digite `sair`: a thread de teclado informa à thread UDP para encerrar e o cliente chama `leaveGroup`. Digite `sair` no servidor para encerrá-lo.
 
-## 5. Exercício 4 — Multicast UDP com login TCP
+Portas e grupo: **5003/TCP** para login; **230.0.0.1:5004/UDP** para avisos. O endereço `230.0.0.1` pertence à faixa IPv4 multicast (classe D). TTL 1 limita o envio à rede local. Se estiver em VPN ou rede que bloqueia multicast, execute os processos na mesma máquina. Login é validação demonstrativa na aplicação cliente: por si só, UDP multicast não restringe um programa externo que conheça o grupo.
 
-Abra **quatro terminais** na mesma máquina:
+## 7. Questão extra — módulo isolado de votação
+
+O PDF pede uma **questão extra 6** que não pertence ao serviço de hotelaria. Para cobrir também essa parte, o código existente em `extra/` implementa um sistema de votação de demonstração com contas fictícias, TCP/ XML para login, lista de opções, envio de votos e administração, e UDP multicast exclusivamente para avisos do administrador. Resultados só são liberados após o prazo configurado; votos duplicados são recusados. Este módulo é independente: não compartilha reservas, hospedagens ou portas com a aplicação principal.
+
+Servidor (prazo de 40 segundos):
 
 ```bash
-# Terminal 1 — servidor
-java -cp out br.ufc.comunicacao.multicast.MulticastServidor
+java -cp out br.ufc.hotelaria.extra.VotacaoServidor 40
 ```
+
+Três clientes, cada um em seu terminal:
 
 ```bash
-# Terminal 2 — cliente A
-java -cp out br.ufc.comunicacao.multicast.MulticastCliente localhost aluno 1234
+java -cp out br.ufc.hotelaria.extra.VotacaoCliente localhost eleitor1 1234
+java -cp out br.ufc.hotelaria.extra.VotacaoCliente localhost eleitor2 1234
+java -cp out br.ufc.hotelaria.extra.VotacaoCliente localhost admin admin123
 ```
 
-```bash
-# Terminal 3 — cliente B
-java -cp out br.ufc.comunicacao.multicast.MulticastCliente localhost aluno 1234
-```
+Eleitores: `listar`, `votar 1`, `resultado`. Administrador: `adicionar Opcao C`, `remover 3`, `nota A votação encerra em breve`. Digite `sair` nos clientes; encerre o servidor com Ctrl+C. O servidor usa **5010/TCP** e **230.0.0.2:5011/UDP**. A figura da página 3 do enunciado ilustra servidor, armazenamento, eleitores e administrador; aqui os dados ficam em memória, pois o texto não exige um SGBD.
 
-Depois de ambos receberem a resposta de autenticação, digite no **terminal do servidor**:
-
-```text
-ALERTA|Estoque baixo da bolsa artesanal
-NOTIFICACAO|Nova peça cadastrada
-ATUALIZACAO|Tabela de estoque atualizada
-```
-
-Os dois clientes devem mostrar o **mesmo datagrama JSON** com `tipo`, `mensagem` e `timestamp`. O servidor também envia uma atualização automática a cada 15 segundos (a primeira após 5 segundos). Em cada cliente, digite `sair` para executar `leaveGroup` e terminar suas duas threads. No servidor, digite `sair` para encerrar.
-
-Fluxo: o cliente **autentica por TCP** na porta **5003** (`aluno/1234`); somente depois a aplicação executa `joinGroup(230.0.0.1)`. A escuta UDP na porta **5004** fica em uma thread e a interação de teclado em outra. O servidor trata logins simultâneos em um pool e produz notificações a partir de um executor com duas threads. O endereço `230.0.0.1` é multicast IPv4 (classe D, como no enunciado); o TTL é 1, limitado à rede local.
-
-**Limitação de segurança:** a autenticação é feita na aplicação cliente, mas o protocolo de multicast UDP por si só não impede que outro programa na mesma rede entre no grupo sem passar pelo TCP. Um sistema real precisaria de controle de rede, credenciais protegidas e criptografia/autorização de mensagens. Alguns roteadores, VPNs e redes Wi-Fi bloqueiam multicast; para a apresentação, prefira executar todos os processos na mesma máquina.
-
-## 6. Questão extra 6 — votação didática
-
-A pasta `extra/` implementa o que a questão extra solicita, separadamente do serviço de estoque:
-
-- Eleitor e administrador fazem **LOGIN** por TCP (porta **5010**) com mensagens **XML**; no login, o servidor envia a lista de candidatos.
-- Eleitores usam `VOTAR` por TCP, com bloqueio de voto duplicado, candidato inexistente e voto após o prazo.
-- Administrador usa `ADICIONAR`, `REMOVER` e `NOTA`; a nota é o **único tipo de envio UDP multicast** neste módulo, ao grupo `230.0.0.2:5011`.
-- O servidor atende diversas conexões por meio de um pool de 16 threads; o acesso ao estado da votação é sincronizado.
-- `RESULTADO` só é liberado após o prazo. Apresenta total, votos, percentuais com duas casas e desfecho, inclusive empate ou ausência de votos. Para cada candidato: `percentual = votos / total * 100`, se `total > 0`.
-- Candidatos fictícios iniciais: `Opção A` e `Opção B`. Não há ligação com uma eleição real.
-
-**Terminal do servidor (prazo de 40 segundos):**
-
-```bash
-java -cp out br.ufc.comunicacao.extra.VotacaoServidor 40
-```
-
-**Terminais de clientes:**
-
-```bash
-java -cp out br.ufc.comunicacao.extra.VotacaoCliente localhost eleitor1 1234
-java -cp out br.ufc.comunicacao.extra.VotacaoCliente localhost eleitor2 1234
-java -cp out br.ufc.comunicacao.extra.VotacaoCliente localhost admin admin123
-```
-
-Em cada terminal de eleitor, use `listar` e `votar 1` ou `votar 2`. No terminal do administrador, use `adicionar Opção C`, `remover 3` (apenas se não houver votos nesse candidato) e `nota A votação encerra em breve`. Ambos os eleitores devem receber a nota via UDP. Depois dos 40 segundos, `resultado` mostra a apuração. Uma tentativa posterior de `votar 1` retorna erro. Digite `sair` em cada cliente; interrompa o servidor com **Ctrl+C**.
-
-A figura da página 3 do enunciado mostra servidor, armazenamento, eleitores e administrador. Nesta solução acadêmica, o armazenamento foi implementado **em memória** (a figura ilustra um banco, mas o texto da questão extra não obriga um SGBD). Uma solução persistente pode substituir o mapa de candidatos por banco de dados sem alterar o protocolo TCP/UDP.
-
-## 7. Testes, demonstração e evidências
-
-No Linux/macOS, execute:
+## 8. Testes e evidências
 
 ```bash
 ./testar_integracao.sh
 ```
 
-O script compila, executa os testes de streams por três meios, cliente/servidor RPC, dois clientes multicast e a questão extra com voto duplicado, credencial inválida, prazo encerrado, operações administrativas, nota multicast e empate. Os registros de execução estão em `evidencias/`.
+O script compila e testa os streams nos três tipos de destino/origem, RPC com reserva/efetivação/cancelamento/erro de capacidade, dois clientes multicast e login recusado, além da questão extra. Gera arquivos em `evidencias/` (logs e dois arquivos binários). `java -cp out br.ufc.hotelaria.testes.Testes` executa **34 verificações** de regras OO, agregação, concorrência, serialização, polimorfismo e XML. Os testes foram executados neste ambiente e passaram; condições de rede do laboratório podem alterar a disponibilidade de multicast em outras máquinas.
 
-Os testes unitários estão em `src/br/ufc/comunicacao/testes/Testes.java` e verificam, entre outros, limites dos streams, cabeçalho inválido, serialização de ida/volta, vendas concorrentes, XML especial e bloqueio de entidades externas. No Windows, use `compilar.bat`, execute `Testes` e reproduza as etapas manuais dos itens 3–6.
+### Limitações e possíveis evoluções
 
-**Critérios de avaliação:** correção funcional (operações e validações), organização (pacotes separados), conceitos (sockets/streams/serialização/multicast/threads), testes (script/logs) e documentação (este README e `ROTEIRO_APRESENTACAO.md`).
+Sem persistência: reiniciar os processos restaura os dados de exemplo. As reservas trabalham com dias completos e quantidade agregada de unidades (não com números de quartos específicos, pagamentos ou documentos). Para operação real seriam necessários banco de dados transacional, autenticação/autorização robusta, TLS, observabilidade e política consistente de reservas e cancelamentos.
 
-## 8. Limitações deliberadas e decisões de projeto
+## 9. Organização do repositório
 
-O escopo do trabalho não exigiu interface gráfica, banco, nuvem ou integração entre as notificações do exercício 4 e cada venda do exercício 3. Por isso as notificações são comandadas pelo servidor multicast (com batimento automático), e os serviços usam dados em memória. Todas as portas são demonstrativas e podem ser alteradas nas respectivas classes se já estiverem ocupadas. O multicast depende da interface e das regras de firewall do sistema operacional. A questão extra usa XML por ser uma das representações aceitas pelo enunciado; o exercício 3 usa binário para evidenciar explicitamente o empacotamento e desempacotamento.
+```text
+trabalho_hotelaria_comunicacao/
+├── src/br/ufc/hotelaria/
+│   ├── modelo/      MeioHospedagem, Hotel, Motel, Pousada, ComplexoTuristico, Hospede, Reserva
+│   ├── contrato/     Reservas
+│   ├── servico/      HospedagemService, ReservaService
+│   ├── streams/      MeioHospedagemOutputStream, MeioHospedagemInputStream, ReservaCodec, StreamsDemo
+│   ├── rpc/          ProtocoloRpc, RpcServidor, RpcCliente
+│   ├── multicast/    MulticastConfig, MulticastServidor, MulticastCliente
+│   ├── extra/        Questão extra independente
+│   └── testes/       Testes
+├── diagrama_classes.puml
+├── ROTEIRO_APRESENTACAO.md
+├── README.md
+├── compilar.sh / compilar.bat
+├── testar_integracao.sh
+└── evidencias/
+```
