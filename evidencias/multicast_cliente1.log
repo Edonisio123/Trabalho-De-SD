@@ -1,0 +1,5 @@
+Resposta TCP: Acesso autorizado ao grupo
+Cliente ouvindo o grupo. Digite 'sair' para leaveGroup:
+[MULTICAST] {"tipo":"ALERTA","mensagem":"Ultima suite disponivel","timestamp":1790188949718}
+[MULTICAST] {"tipo":"ATUALIZACAO","mensagem":"Servidor de reservas ativo","timestamp":1790188951064}
+Cliente saiu do grupo multicast (leaveGroup).

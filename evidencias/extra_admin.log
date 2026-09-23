@@ -1,0 +1,9 @@
+<resposta sucesso="true" mensagem="Login efetuado; papel=ADMIN"><candidatos><candidato id="1" nome="Op??o A"/><candidato id="2" nome="Op??o B"/></candidatos></resposta>
+Comandos: listar | adicionar NOME | remover ID | nota TEXTO | resultado | sair
+Servidor: Candidato adicionado: 3
+<resposta sucesso="true" mensagem="Candidato adicionado: 3"><candidatos><candidato id="1" nome="Op??o A"/><candidato id="2" nome="Op??o B"/><candidato id="3" nome="Opcao C"/></candidatos></resposta>
+Servidor: Candidato removido
+<resposta sucesso="true" mensagem="Candidato removido"><candidatos><candidato id="1" nome="Op??o A"/><candidato id="2" nome="Op??o B"/></candidatos></resposta>
+Servidor: Nota informativa enviada via UDP multicast
+<resposta sucesso="true" mensagem="Nota informativa enviada via UDP multicast"></resposta>
+Sess?o encerrada.

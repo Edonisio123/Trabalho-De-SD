@@ -1,0 +1,17 @@
+Sucesso: true | Meios de hospedagem do Complexo Tur?stico Dunas
+HOTEL{id=1, nome='Hotel Praia Azul', endereco='Av. Beira-Mar, 10', di?ria=R$ 350,00, unidades=5} | estrelas=4
+MOTEL{id=2, nome='Motel Sol', endereco='Rua das Flores, 20', di?ria=R$ 180,00, unidades=3} | garagemPrivativa=true
+POUSADA{id=3, nome='Pousada do Bosque', endereco='Rua Verde, 30', di?ria=R$ 220,00, unidades=2} | cafeIncluso=true
+Sucesso: true | Reserva registrada
+Reserva{id=601, meioId=1, hospede='Ana Lima', entrada=2027-07-10, saida=2027-07-13, unidades=4, status=PENDENTE}
+Valor da reserva: R$ 4200,00
+Sucesso: true | Unidades dispon?veis no per?odo
+Unidades dispon?veis: 1
+Sucesso: false | Unidades indispon?veis no per?odo
+Sucesso: true | Reserva efetivada
+Reserva{id=601, meioId=1, hospede='Ana Lima', entrada=2027-07-10, saida=2027-07-13, unidades=4, status=EFETIVADA}
+Valor da reserva: R$ 4200,00
+Sucesso: true | Reserva cancelada
+Reserva{id=601, meioId=1, hospede='Ana Lima', entrada=2027-07-10, saida=2027-07-13, unidades=4, status=CANCELADA}
+Sucesso: true | Unidades dispon?veis no per?odo
+Unidades dispon?veis: 5

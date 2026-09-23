@@ -1,0 +1,6 @@
+<resposta sucesso="true" mensagem="Login efetuado; papel=ELEITOR"><candidatos><candidato id="1" nome="Op??o A"/><candidato id="2" nome="Op??o B"/></candidatos></resposta>
+Comandos: listar | votar ID | resultado | sair
+Servidor: Voto registrado
+<resposta sucesso="true" mensagem="Voto registrado"></resposta>
+[NOTA UDP] {"tipo":"NOTA","mensagem":"Aviso do administrador","timestamp":1790188956584}
+Sess?o encerrada.

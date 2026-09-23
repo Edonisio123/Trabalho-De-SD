@@ -1,0 +1,4 @@
+Arquivo gravado: evidencias/reservas.bin
+Reserva{id=101, meioId=1, hospede='Ana Lima', entrada=2027-01-10, saida=2027-01-12, unidades=1, status=PENDENTE}
+Reserva{id=102, meioId=3, hospede='Joao Silva', entrada=2027-01-12, saida=2027-01-15, unidades=2, status=PENDENTE}
+Reserva{id=103, meioId=2, hospede='Maria Costa', entrada=2027-02-01, saida=2027-02-02, unidades=1, status=PENDENTE}
