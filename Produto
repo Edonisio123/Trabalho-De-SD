@@ -1,0 +1,36 @@
+package br.ufc.comunicacao.modelo;
+
+/** POJO do domínio: produto em um estoque de peças artesanais. */
+public class Produto {
+    private int id;
+    private String nome;
+    private long precoCentavos;
+    private int quantidade;
+
+    public Produto(int id, String nome, long precoCentavos, int quantidade) {
+        if (id <= 0 || nome == null || nome.isBlank() || precoCentavos < 0 || quantidade < 0) {
+            throw new IllegalArgumentException("Dados de produto inválidos");
+        }
+        this.id = id;
+        this.nome = nome;
+        this.precoCentavos = precoCentavos;
+        this.quantidade = quantidade;
+    }
+
+    public int getId() { return id; }
+    public String getNome() { return nome; }
+    public long getPrecoCentavos() { return precoCentavos; }
+    public int getQuantidade() { return quantidade; }
+
+    public void setQuantidade(int quantidade) {
+        if (quantidade < 0) throw new IllegalArgumentException("Estoque não pode ser negativo");
+        this.quantidade = quantidade;
+    }
+
+    public Produto copiar() { return new Produto(id, nome, precoCentavos, quantidade); }
+
+    @Override public String toString() {
+        return String.format("Produto{id=%d, nome='%s', preço=R$ %d,%02d, estoque=%d}",
+                id, nome, precoCentavos / 100, precoCentavos % 100, quantidade);
+    }
+}
