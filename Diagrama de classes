@@ -1,0 +1,81 @@
+@startuml
+skinparam classAttributeIconSize 0
+title Trabalho 1 — Sistema de Hotelaria (modelo orientado a objetos)
+
+abstract class MeioHospedagem {
+  - id: int
+  - nome: String
+  - endereco: String
+  - diariaCentavos: long
+  - totalUnidades: int
+  + getTipo(): String
+}
+class Hotel {
+  - estrelas: int
+  + getTipo(): String
+}
+class Motel {
+  - garagemPrivativa: boolean
+  + getTipo(): String
+}
+class Pousada {
+  - cafeDaManhaIncluso: boolean
+  + getTipo(): String
+}
+class ComplexoTuristico {
+  - nome: String
+  - estabelecimentos: Map<int, MeioHospedagem>
+  + agregar(meio: MeioHospedagem): void
+  + desagregar(id: int): MeioHospedagem
+  + listar(): List<MeioHospedagem>
+}
+class Hospede {
+  - id: int
+  - nome: String
+}
+class Reserva {
+  - id: int
+  - meioHospedagemId: int
+  - entrada: LocalDate
+  - saida: LocalDate
+  - unidades: int
+  - status: Status
+  + efetivar(): void
+  + cancelar(): void
+}
+interface Reservas {
+  + registrarReserva(reserva: Reserva): Reserva
+  + cancelarReserva(id: int): Reserva
+  + efetivarReserva(id: int): Reserva
+}
+class HospedagemService {
+  + cadastrar(meio: MeioHospedagem): void
+  + consultar(id: int): MeioHospedagem
+  + listar(): List<MeioHospedagem>
+}
+class ReservaService {
+  + disponibilidade(meioId: int, entrada: LocalDate, saida: LocalDate): int
+  + valorReservaCentavos(id: int): long
+}
+
+MeioHospedagem <|-- Hotel
+MeioHospedagem <|-- Motel
+MeioHospedagem <|-- Pousada
+ComplexoTuristico "1" o-- "0..*" MeioHospedagem : agrega
+Reserva "0..*" --> "1" Hospede : hospede
+Reserva "0..*" ..> "1" MeioHospedagem : referencia ID
+HospedagemService --> ComplexoTuristico : utiliza
+ReservaService ..|> Reservas
+ReservaService --> HospedagemService : consulta
+ReservaService --> Reserva : gerencia
+
+note right of ComplexoTuristico
+ Agregação: hospedar/remover um meio do
+ complexo NÃO cria/destrói a instância.
+end note
+note right of ReservaService
+ synchronized protege a verificação
+ de disponibilidade e o registro
+ de reservas concorrentes.
+end note
+@enduml
