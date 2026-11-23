@@ -1,0 +1,22 @@
+name: Validar Trabalho 4
+on:
+  push:
+    branches: [trabalho4-fila-persistente]
+  pull_request:
+    branches: [main]
+jobs:
+  java:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compilar
+        run: bash compilar.sh
+      - name: Testes existentes
+        run: java -cp out br.ufc.hotelaria.testes.Testes
+      - name: Testes de comunicação indireta
+        run: bash testar_trabalho4.sh
