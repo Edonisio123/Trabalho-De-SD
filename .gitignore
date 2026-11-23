@@ -1,0 +1,5 @@
+out/
+fontes.txt
+dados_fila/
+dados_outbox/
+*.class
