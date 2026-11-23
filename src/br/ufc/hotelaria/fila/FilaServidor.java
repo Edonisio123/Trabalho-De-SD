@@ -21,10 +21,12 @@ public final class FilaServidor {
     private final Path pasta;
     private final long leaseMs;
     private long proximoId;
+    private final Path sequencia;
 
     public FilaServidor(Path pasta, long leaseMs) throws IOException {
         if (leaseMs < 1) throw new IllegalArgumentException("Prazo de confirmação inválido");
         this.pasta = pasta;
+        this.sequencia = pasta.resolve("sequencia.txt");
         this.leaseMs = leaseMs;
         Files.createDirectories(pasta);
         try (var arquivos = Files.list(pasta)) {
@@ -36,6 +38,9 @@ public final class FilaServidor {
                 proximoId = Math.max(proximoId, id);
             }
         }
+        if (Files.exists(sequencia)) {
+            proximoId = Math.max(proximoId, Long.parseLong(Files.readString(sequencia).trim()));
+        }
         System.out.println("Fila recuperada: " + mensagens.size() + " mensagens em " + pasta.toAbsolutePath());
     }
 
@@ -44,6 +49,12 @@ public final class FilaServidor {
     private synchronized long publicar(String texto) throws IOException {
         if (texto.isBlank()) throw new IOException("Mensagem vazia");
         long id = ++proximoId;
+        Path temporarioSeq = Files.createTempFile(pasta, ".sequencia-", ".tmp");
+        try {
+            Files.writeString(temporarioSeq, Long.toString(id));
+            try { Files.move(temporarioSeq, sequencia, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
+            catch (AtomicMoveNotSupportedException e) { Files.move(temporarioSeq, sequencia, StandardCopyOption.REPLACE_EXISTING); }
+        } finally { Files.deleteIfExists(temporarioSeq); }
         Path temporario = Files.createTempFile(pasta, ".pendente-", ".tmp");
         try {
             try (var saida = new DataOutputStream(Files.newOutputStream(temporario))) { saida.writeUTF(texto); }
