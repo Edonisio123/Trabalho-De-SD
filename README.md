@@ -222,3 +222,81 @@ trabalho_hotelaria_comunicacao/
 ├── testar_integracao.sh
 └── evidencias/
 ```
+
+---
+
+## Trabalho 4 — Comunicação Indireta: Opção C (Filas de Mensagens)
+
+**Relatório técnico:** [RELATORIO_TRABALHO4.md](RELATORIO_TRABALHO4.md). Os fundamentos, a análise do overhead, as limitações e o roteiro da demonstração estão nesse documento; o resumo técnico também está abaixo.
+
+### Por que fila persistente?
+
+O RPC do sistema principal mantém comunicação direta para consultas e operações. Agora cada operação de registrar, efetivar e cancelar reserva também cria um evento em uma **outbox local**. Um publicador em segundo plano envia os eventos ao **broker TCP**, que os armazena como arquivos até um consumidor recebê-los e confirmar o processamento. O produtor não conhece o endereço dos consumidores, e o consumidor pode estar offline.
+
+Fluxo: **RpcCliente → RpcServidor → outbox → FilaServidor → FilaConsumidor → ACK**.
+
+A fila usa leases (padrão 5000 ms) e redespacha mensagens não confirmadas, fornecendo **entrega pelo menos uma vez**, não exatamente uma vez. O broker e a outbox preservam mensagens em disco durante reinicializações, desde que os diretórios sejam mantidos. A semântica exige consumidores idempotentes para casos de duplicação; o exemplo apenas registra o recebimento e confirma.
+
+### Executar no Linux, macOS ou Git Bash
+
+Compile com:
+
+```bash
+bash compilar.sh
+```
+
+Abra três terminais na raiz do projeto (não apague dados_fila nem dados_outbox durante a demonstração).
+
+**Terminal 1 — Broker:**
+
+```bash
+java -cp out br.ufc.hotelaria.fila.FilaServidor 5050 dados_fila 5000
+```
+
+**Terminal 2 — Servidor de reservas com publicação automática de eventos:**
+
+```bash
+java -cp out br.ufc.hotelaria.rpc.RpcServidor 5002
+```
+
+**Terminal 3 — Registrar uma reserva (o consumidor ainda não precisa estar ligado):**
+
+```bash
+java -cp out br.ufc.hotelaria.rpc.RpcCliente localhost 5002 REGISTRAR 801 1 51 "Ana Lima" 2027-10-10 2027-10-13 2
+java -cp out br.ufc.hotelaria.fila.FilaPublicador localhost 5050 ESTADO
+```
+
+A segunda linha deve mostrar uma mensagem pendente. Agora inicie um consumidor:
+
+```bash
+java -cp out br.ufc.hotelaria.fila.FilaConsumidor localhost 5050 --uma
+```
+
+Você verá um evento `RESERVA_CRIADA` e a confirmação. Também podem ser gerados eventos com `EFETIVAR 801` e `CANCELAR 801` no RpcCliente.
+
+Para demonstrar perda de ACK, publique uma mensagem de teste e use:
+
+```bash
+java -cp out br.ufc.hotelaria.fila.FilaPublicador localhost 5050 EVENTO_DE_TESTE
+java -cp out br.ufc.hotelaria.fila.FilaConsumidor localhost 5050 --sem-ack
+```
+
+Após cinco segundos, execute `FilaConsumidor localhost 5050 --uma` novamente e observe a reentrega. Para verificar persistência, reinicie apenas o broker com a **mesma pasta** e consuma mensagens que ainda não receberam ACK.
+
+**Teste automatizado do Trabalho 4:**
+
+```bash
+bash testar_trabalho4.sh
+```
+
+O script cobre persistência após reinício do broker, consumidor sem ACK, fluxo RPC → outbox → broker → consumidor e recuperação quando o broker fica temporariamente offline.
+
+**Windows (Prompt de Comando):** use `compilar.bat` e rode os mesmos comandos `java -cp out ...` em janelas separadas. O script de integração requer Bash.
+
+### Configurações
+
+O servidor RPC aceita `HOTELARIA_FILA_HOST` (padrão `127.0.0.1`), `HOTELARIA_FILA_PORT` (padrão `5050`) e `HOTELARIA_OUTBOX_DIR` (padrão `dados_outbox`). O broker aceita porta, diretório persistente e tempo de lease em milissegundos por argumentos posicionais. Esses caminhos devem ser mantidos ao reiniciar para recuperar eventos.
+
+### Análise de flexibilidade e desempenho (resumo do relatório)
+
+A arquitetura permite que componentes tenham tempos de vida independentes, sem configuração de IP/porta do receptor final. Também retém eventos durante falhas ou desconexões. O custo é maior latência e uso de CPU, rede e disco: serializar, armazenar, consultar e confirmar exige operações adicionais. Para mitigar, manter mensagens pequenas, controlar frequência de polling, usar lotes em versões futuras e monitorar o tamanho da fila. Este broker é demonstrativo: ainda não implementa replicação, fsync explícito, segurança de rede ou atomicidade entre as reservas em memória e a outbox. A confirmação após o processamento fornece semântica pelo menos uma vez e exige idempotência em consumidores reais.
